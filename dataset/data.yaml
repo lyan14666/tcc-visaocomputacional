@@ -1,0 +1,8 @@
+path: /home/lyan/Documentos/tcc-visao/tcc-visaocomputacional/dataset
+
+train: images/train
+val: images/val
+
+names:
+  0: faca
+  1: arma
