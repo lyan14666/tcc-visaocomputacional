@@ -1,9 +1,6 @@
-path: /home/lyan/Documentos/tcc-visao/tcc-visaocomputacional/dataset
-
-train: images/train
-val: images/valid
-test: images/test
+train: ../train/images
+val: ../valid/images
+test: ../test/images
 
 nc: 1
-names:
-  0: knife
+names: ['knife']

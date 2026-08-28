@@ -1,102 +1,191 @@
 import cv2
 from ultralytics import YOLO
 
-MODEL = "runs/detect/training/runs/knife_test/weights/best.pt"
 
-model = YOLO(MODEL)
+# =========================================================
+# CONFIGURAÇÕES
+# =========================================================
 
-cap = cv2.VideoCapture(0)
+MODEL_PATH = "runs/detect/runs/detect/knife_v2/weights/best.pt"
 
-if not cap.isOpened():
-    raise RuntimeError("Não foi possível abrir a câmera.")
+CONFIDENCE = 0.35
+IOU = 0.45
+IMAGE_SIZE = 640
+DEVICE = "cpu"
 
-# Tenta usar uma resolução adequada
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+WINDOW_NAME = "Teste - Deteccao de Facas"
 
-print("=" * 50)
-print("TCC - DETECÇÃO DE FACAS")
-print("=" * 50)
-print("Modelo:", MODEL)
-print("Confiança mínima: 0.20")
+
+# =========================================================
+# CARREGAR MODELO
+# =========================================================
+
+print("=" * 60)
+print("TESTE - DETECCAO DE FACAS")
+print("=" * 60)
+
+print("Modelo:", MODEL_PATH)
+print("Confianca:", CONFIDENCE)
+print("IOU:", IOU)
+print("Imagem:", IMAGE_SIZE)
+print("Device:", DEVICE)
+print("=" * 60)
+
+model = YOLO(MODEL_PATH)
+
+print("Modelo carregado com sucesso.")
+print("=" * 60)
+
+
+# =========================================================
+# PROCURAR CAMERA
+# =========================================================
+
+print("Procurando camera...")
+
+cap = None
+
+for camera_id in range(10):
+
+    print(f"Tentando /dev/video{camera_id}...")
+
+    test = cv2.VideoCapture(
+        camera_id,
+        cv2.CAP_V4L2
+    )
+
+    if not test.isOpened():
+        test.release()
+        continue
+
+    ret, frame = test.read()
+
+    if ret and frame is not None:
+
+        cap = test
+
+        print(
+            f"Camera encontrada: /dev/video{camera_id}"
+        )
+
+        break
+
+    test.release()
+
+
+if cap is None:
+
+    raise RuntimeError(
+        "Nenhuma camera funcional foi encontrada."
+    )
+
+
+# =========================================================
+# CONFIGURAR CAMERA
+# =========================================================
+
+cap.set(
+    cv2.CAP_PROP_FRAME_WIDTH,
+    1280
+)
+
+cap.set(
+    cv2.CAP_PROP_FRAME_HEIGHT,
+    720
+)
+
+cap.set(
+    cv2.CAP_PROP_BUFFERSIZE,
+    1
+)
+
+
+print("=" * 60)
+print("Camera pronta.")
 print("Pressione Q para sair.")
-print("=" * 50)
+print("=" * 60)
+
+
+# =========================================================
+# LOOP
+# =========================================================
 
 while True:
 
     ret, frame = cap.read()
 
     if not ret:
+
         print("Erro ao capturar imagem.")
         break
 
-    # Espelha a câmera como uma webcam normal
-    frame = cv2.flip(frame, 1)
+
+    # =====================================================
+    # ESPELHAR CAMERA
+    # =====================================================
+
+    frame = cv2.flip(
+        frame,
+        1
+    )
+
+
+    # =====================================================
+    # DETECÇÃO YOLO
+    # =====================================================
 
     results = model.predict(
+
         source=frame,
-        conf=0.20,
-        iou=0.45,
-        imgsz=640,
-        device="cpu",
+
+        conf=CONFIDENCE,
+
+        iou=IOU,
+
+        imgsz=IMAGE_SIZE,
+
+        device=DEVICE,
+
         verbose=False
     )
 
+
     result = results[0]
 
-    # Desenha as detecções
+
+    # =====================================================
+    # DESENHAR DETECÇÕES
+    # =====================================================
+
     annotated = result.plot()
 
-    # Quantidade de objetos detectados
-    detections = len(result.boxes)
 
-    # Mostra informação na tela
-    cv2.putText(
-        annotated,
-        f"Deteccoes: {detections}",
-        (20, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2
-    )
-
-    # Se detectou alguma coisa
-    if detections > 0:
-
-        highest_conf = float(result.boxes.conf.max())
-
-        cv2.putText(
-            annotated,
-            f"FACA DETECTADA - {highest_conf:.2f}",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (0, 0, 255),
-            3
-        )
-
-    else:
-
-        cv2.putText(
-            annotated,
-            "Nenhuma faca detectada",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255, 255, 255),
-            2
-        )
+    # =====================================================
+    # MOSTRAR CAMERA
+    # =====================================================
 
     cv2.imshow(
-        "TCC - Deteccao de Facas",
+        WINDOW_NAME,
         annotated
     )
+
+
+    # =====================================================
+    # TECLADO
+    # =====================================================
 
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord("q"):
         break
 
+
+# =========================================================
+# ENCERRAR
+# =========================================================
+
 cap.release()
+
 cv2.destroyAllWindows()
+
+print("Teste encerrado.")
