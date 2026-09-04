@@ -1,0 +1,42 @@
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MODEL_PATH = BASE_DIR / "runs/detect/runs/detect/knife_v3_negativos/weights/best.pt"
+
+CAMERA_INDEX = 0
+
+CONFIDENCE = 0.35
+IOU = 0.45
+
+IMAGE_SIZE = 640
+
+DEVICE = "cpu"
+
+MIN_BOX_WIDTH = 20
+MIN_BOX_HEIGHT = 10
+MIN_BOX_AREA = 300
+
+MAX_BOX_AREA_RATIO = 0.80
+
+CONFIRMATION_FRAMES = 4
+MAX_LOST_FRAMES = 6
+
+MAX_CENTER_DISTANCE = 180
+
+SMOOTHING = 0.45
+
+HISTORY_SIZE = 15
+
+MAX_DETECTIONS = 5
+
+ALERT_COOLDOWN = 2.0
+
+DISPLAY_WIDTH = 960
+DISPLAY_HEIGHT = 540
+
+CAMERA_BUFFER = 1
+
+TRACKER_ENABLED = True
+TRACKER_CONFIG = "bytetrack.yaml"
+TRACKER_PERSIST = True
