@@ -3,43 +3,28 @@ import time
 from init import ALERT_COOLDOWN
 
 
-class AlertManager:
+class AlertSystem:
 
     def __init__(self):
 
         self.last_alert = 0.0
 
-        self.cooldown = ALERT_COOLDOWN
+    def update(self, detected, confirmed):
 
-        self.active = False
-
-    def update(self, confirmed):
-
-        current_time = time.time()
-
-        if not confirmed:
-
-            self.active = False
-
+        if not detected or not confirmed:
             return False
 
-        if (
-            current_time -
-            self.last_alert
-            < self.cooldown
-        ):
+        now = time.time()
 
+        if now - self.last_alert < ALERT_COOLDOWN:
             return False
 
-        self.last_alert = current_time
+        self.last_alert = now
 
-        self.active = True
-
-        print(
-            "\n"
-            "==============================\n"
-            "       ALERTA: FACA DETECTADA\n"
-            "==============================\n"
-        )
+        print("[ALERTA] FACA CONFIRMADA")
 
         return True
+
+    def reset(self):
+
+        self.last_alert = 0.0

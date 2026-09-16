@@ -1,184 +1,284 @@
-import cv2
+import sys
 import time
+from pathlib import Path
 
-from test_detector import KnifeDetector
-from test_alerts import AlertManager
+import cv2
+
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parent)
+)
 
 from init import (
     CAMERA_INDEX,
-    DISPLAY_WIDTH,
-    DISPLAY_HEIGHT,
-    CAMERA_BUFFER
+    CAMERA_WIDTH,
+    CAMERA_HEIGHT,
+    WINDOW_NAME,
+    CONFIDENCE,
+    CONFIRMATION_FRAMES
 )
 
+from test_detector import KnifeDetector
+from test_alerts import AlertSystem
 
-def open_camera():
 
-    camera = cv2.VideoCapture(
-        CAMERA_INDEX,
-        cv2.CAP_V4L2
+def draw_detection(frame, detection, confirmed):
+
+    x1, y1, x2, y2 = detection["box"]
+
+    confidence = detection["confidence"]
+    track_id = detection["track_id"]
+
+    if confirmed:
+        color = (0, 0, 255)
+        text = "FACA CONFIRMADA"
+    else:
+        color = (0, 255, 255)
+        text = "POSSIVEL FACA"
+
+    cv2.rectangle(
+        frame,
+        (x1, y1),
+        (x2, y2),
+        color,
+        3
     )
 
-    if not camera.isOpened():
+    label = f"{text} {confidence * 100:.1f}%"
 
-        camera.release()
+    if track_id is not None:
+        label += f" | ID {track_id}"
 
-        camera = cv2.VideoCapture(
-            CAMERA_INDEX
-        )
-
-    if not camera.isOpened():
-
-        raise RuntimeError(
-            "Nao foi possivel abrir a camera."
-        )
-
-    camera.set(
-        cv2.CAP_PROP_FRAME_WIDTH,
-        DISPLAY_WIDTH
+    cv2.putText(
+        frame,
+        label,
+        (x1, max(30, y1 - 10)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        color,
+        2,
+        cv2.LINE_AA
     )
 
-    camera.set(
-        cv2.CAP_PROP_FRAME_HEIGHT,
-        DISPLAY_HEIGHT
-    )
 
-    camera.set(
-        cv2.CAP_PROP_BUFFERSIZE,
-        CAMERA_BUFFER
-    )
-
-    return camera
-
-
-def resize_frame(frame):
+def draw_status(frame, detections, confirmed, fps, confirmation):
 
     height, width = frame.shape[:2]
 
-    if width <= DISPLAY_WIDTH:
-        return frame
+    overlay = frame.copy()
 
-    ratio = DISPLAY_WIDTH / width
-
-    new_width = DISPLAY_WIDTH
-
-    new_height = int(
-        height * ratio
+    cv2.rectangle(
+        overlay,
+        (0, 0),
+        (width, 105),
+        (15, 15, 15),
+        -1
     )
 
-    return cv2.resize(
+    frame[:] = cv2.addWeighted(
+        overlay,
+        0.75,
         frame,
-        (
-            new_width,
-            new_height
-        ),
-        interpolation=cv2.INTER_AREA
+        0.25,
+        0
+    )
+
+    if confirmed:
+
+        status = "ALERTA - FACA DETECTADA"
+        color = (0, 0, 255)
+
+    elif detections:
+
+        status = "CONFIRMANDO DETECCAO"
+        color = (0, 255, 255)
+
+    else:
+
+        status = "MONITORANDO"
+        color = (0, 255, 0)
+
+    cv2.putText(
+        frame,
+        status,
+        (20, 35),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        color,
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"FPS: {fps:.1f}",
+        (20, 72),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"CONF: {CONFIDENCE:.2f}",
+        (140, 72),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"FRAME: {confirmation}/{CONFIRMATION_FRAMES}",
+        (280, 72),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "Q/ESC: sair",
+        (20, 98),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
     )
 
 
 def main():
 
+    print("=" * 60)
+    print("TCC - SISTEMA DE DETECCAO DE FACAS")
+    print("=" * 60)
+
+    print("[1] Inicializando detector...")
+
     detector = KnifeDetector()
 
-    alert_manager = AlertManager()
+    print("[OK] Detector carregado")
 
-    camera = open_camera()
+    print("[2] Inicializando alertas...")
+
+    alerts = AlertSystem()
+
+    print("[OK] Sistema de alertas carregado")
+
+    print("[3] Abrindo camera...")
+
+    cap = cv2.VideoCapture(
+        CAMERA_INDEX,
+        cv2.CAP_V4L2
+    )
+
+    cap.set(
+        cv2.CAP_PROP_FRAME_WIDTH,
+        CAMERA_WIDTH
+    )
+
+    cap.set(
+        cv2.CAP_PROP_FRAME_HEIGHT,
+        CAMERA_HEIGHT
+    )
+
+    cap.set(
+        cv2.CAP_PROP_BUFFERSIZE,
+        1
+    )
+
+    if not cap.isOpened():
+
+        raise RuntimeError(
+            "Nao foi possivel abrir a camera."
+        )
+
+    print("[OK] Camera aberta")
+
+    print("[4] Sistema iniciado")
+    print("=" * 60)
 
     previous_time = time.time()
-
     fps = 0.0
 
-    try:
+    while True:
 
-        while True:
+        success, frame = cap.read()
 
-            success, frame = camera.read()
+        if not success:
 
-            if not success:
-                continue
+            print("[ERRO] Falha ao capturar frame")
 
-            frame = resize_frame(frame)
+            break
 
-            detection = detector.process(
-                frame
-            )
+        frame = cv2.flip(frame, 1)
 
-            frame = detector.draw(
+        detections = detector.detect(frame)
+
+        confirmed = detector.is_confirmed()
+
+        alerts.update(
+            bool(detections),
+            confirmed
+        )
+
+        for detection in detections:
+
+            draw_detection(
                 frame,
-                detection
-            )
-
-            confirmed = False
-
-            if detection is not None:
-
-                confirmed = detection.get(
-                    "confirmed",
-                    False
-                )
-
-            alert_manager.update(
+                detection,
                 confirmed
             )
 
-            current_time = time.time()
+        current_time = time.time()
 
-            elapsed = (
-                current_time -
-                previous_time
+        delta = current_time - previous_time
+
+        if delta > 0:
+
+            current_fps = 1.0 / delta
+
+            fps = (
+                fps * 0.9
+                +
+                current_fps * 0.1
             )
 
-            if elapsed > 0:
+        previous_time = current_time
 
-                instant_fps = (
-                    1.0 / elapsed
-                )
+        draw_status(
+            frame,
+            detections,
+            confirmed,
+            fps,
+            detector.confirmation
+        )
 
-                fps = (
-                    fps * 0.90 +
-                    instant_fps * 0.10
-                )
+        cv2.imshow(
+            WINDOW_NAME,
+            frame
+            
+        )
 
-            previous_time = current_time
+        key = cv2.waitKey(1) & 0xFF
 
-            cv2.putText(
-                frame,
-                f"FPS: {fps:.1f}",
-                (20, 35),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2
-            )
+        if key == ord("q") or key == 27:
+            break
 
-            cv2.putText(
-                frame,
-                "Q = sair",
-                (20, 65),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 255, 255),
-                2
-            )
+    cap.release()
 
-            cv2.imshow(
-                "Detector de Facas",
-                frame
-            )
+    cv2.destroyAllWindows()
 
-            key = cv2.waitKey(1) & 0xFF
-
-            if key == ord("q"):
-                break
-
-            if key == 27:
-                break
-
-    finally:
-
-        camera.release()
-
-        cv2.destroyAllWindows()
+    print("=" * 60)
+    print("Sistema encerrado.")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
