@@ -1,6 +1,54 @@
 import sys
+import subprocess
 import time
+import json
+import os
+import urllib.request
 from pathlib import Path
+
+
+def send_alert_to_panel(detections):
+    token = os.environ.get("VIGIA_API_TOKEN", "")
+
+    if not token:
+        print("[PAINEL] VIGIA_API_TOKEN nao configurado.")
+        return
+
+    if not detections:
+        return
+
+    detection = max(
+        detections,
+        key=lambda item: item.get("confidence", 0)
+    )
+
+    track_id = detection.get("track_id")
+    if not isinstance(track_id, int):
+        track_id = None
+
+    payload = {
+        "camera": "CAMERA_01",
+        "confianca": float(detection["confidence"]),
+        "track_id": track_id
+    }
+
+    request = urllib.request.Request(
+        "http://127.0.0.1:8000/api/evento.php",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-Vigia-Token": token
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=2) as response:
+            print("[PAINEL] Evento registrado:", response.read().decode("utf-8"))
+    except Exception as error:
+        print(f"[PAINEL] Nao foi possivel registrar o evento: {error}")
+
+
 
 import cv2
 
@@ -17,6 +65,8 @@ from init import (
     CONFIDENCE,
     CONFIRMATION_FRAMES
 )
+
+from panel_stream import start_panel, publish_frame, stop_panel
 
 from test_detector import KnifeDetector
 from test_alerts import AlertSystem
@@ -155,6 +205,9 @@ def draw_status(frame, detections, confirmed, fps, confirmation):
 
 
 def main():
+    project_root = Path(__file__).resolve().parents[1]
+    os.environ.setdefault('VIGIA_API_TOKEN', 'vigia-dev-token-local-2026')
+    start_panel(project_root)
 
     print("=" * 60)
     print("TCC - SISTEMA DE DETECCAO DE FACAS")
@@ -224,10 +277,18 @@ def main():
 
         confirmed = detector.is_confirmed()
 
-        alerts.update(
+        alert_triggered = alerts.update(
             bool(detections),
             confirmed
         )
+
+        if alert_triggered:
+            subprocess.Popen(
+                ["aplay", "-q", str(project_root / "sounds" / "alerta.wav")],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            send_alert_to_panel(detections)
 
         for detection in detections:
 
@@ -261,20 +322,11 @@ def main():
             detector.confirmation
         )
 
-        cv2.imshow(
-            WINDOW_NAME,
-            frame
-            
-        )
-
-        key = cv2.waitKey(1) & 0xFF
-
-        if key == ord("q") or key == 27:
-            break
-
+        publish_frame(frame)
     cap.release()
 
     cv2.destroyAllWindows()
+    stop_panel()
 
     print("=" * 60)
     print("Sistema encerrado.")

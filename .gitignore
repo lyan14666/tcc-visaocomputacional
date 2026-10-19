@@ -18,3 +18,24 @@ wandb/
 
 .vscode/
 .idea/
+
+# Modelos de IA grandes
+*.pt
+*.onnx
+*.engine
+
+# Datasets e resultados gerados
+dataset/
+runs/
+recordings/
+logs/
+
+# Ambiente Python
+.venv/
+__pycache__/
+*.py[cod]
+/todos_treinamentos_tar.gz
+/todos_treinamentos_tcc.tar.gz
+
+/todos_treinamentos_tcc.tar.gz
+/todos_treinamentos_tar.gz
